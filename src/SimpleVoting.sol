@@ -5,12 +5,12 @@ import {VotingLibrary} from "./VotingLibrary.sol";
 
 contract SimpleVoting {
     VotingLibrary.State stateMachine = VotingLibrary.State({isRegistering: true, isVoting: false, isClosed: false});
-    mapping(address => VotingLibrary.Voter) addressToVoter;
+    mapping(address => VotingLibrary.Voter) private addressToVoter;
     VotingLibrary.Candidate[] private candidates;
 
     VotingLibrary.Candidate private winner;
 
-    address immutable I_OWNER;
+    address immutable private I_OWNER;
 
     constructor() {
         I_OWNER = msg.sender;
@@ -136,5 +136,13 @@ contract SimpleVoting {
             }
         }
         return currentWinner;
+    }
+
+    function getOwner() external view returns(address) {
+        return I_OWNER;
+    }
+
+    function getAddressToVoter(address voter) external view returns (VotingLibrary.Voter memory) {
+        return addressToVoter[voter];
     }
 }
