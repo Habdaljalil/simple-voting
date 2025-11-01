@@ -6,6 +6,7 @@ import {SimpleVoting} from "../src/SimpleVoting.sol";
 
 contract DeploySimpleVoting is Script {
     SimpleVoting simpleVoting;
+
     function run(address owner) public returns (SimpleVoting) {
         vm.startPrank(owner);
         simpleVoting = new SimpleVoting();

@@ -1,40 +1,40 @@
-// SPDX-LICENSE-IDENTIFIER: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
 import {VotingLibrary} from "./VotingLibrary.sol";
 
 contract SimpleVoting {
-    VotingLibrary.State stateMachine = VotingLibrary.State({isRegistering: true, isVoting: false, isClosed: false});
+    VotingLibrary.State private stateMachine;
     mapping(address => VotingLibrary.Voter) private addressToVoter;
-    VotingLibrary.Candidate[] private candidates;
+    mapping(string => VotingLibrary.Candidate) nameToCandidate;
 
-    VotingLibrary.Candidate private winner;
+    uint256 private numberOfRegisteredVoters;
 
-    address immutable private I_OWNER;
+    string[] private candidates;
+
+    string private winner;
+
+    address private immutable I_OWNER;
 
     constructor() {
         I_OWNER = msg.sender;
     }
 
-    modifier isRegistrationPhase() {
-        _isRegistrationPhase();
+    event VoterRegistered(address indexed voter);
+    event CandidateRegistered(string indexed candidate);
+    event Voted(address indexed voter, string indexed candidate);
+    event RegistrationEnded();
+    event VotingStarted();
+    event VotingEnded();
+
+    modifier eqState(VotingLibrary.State expectedState) {
+        _eqState(expectedState);
         _;
     }
 
-    function _isRegistrationPhase() internal view {
-        if (stateMachine.isRegistering == false) {
-            revert VotingLibrary.REGISTERING__IS__OVER();
-        }
-    }
-
-    modifier isClosed() {
-        _isClosed();
-        _;
-    }
-
-    function _isClosed() internal view {
-        if (stateMachine.isClosed == false) {
-            revert VotingLibrary.IS__NOT__CLOSED();
+    function _eqState(VotingLibrary.State expectedState) internal view {
+        if (stateMachine != expectedState) {
+            revert VotingLibrary.WRONG__PHASE(expectedState, stateMachine);
         }
     }
 
@@ -49,22 +49,33 @@ contract SimpleVoting {
         }
     }
 
-    modifier candidateExists(uint256 candidateId) {
+    modifier candidateExists(string memory candidateName) {
         // assumes that candidates is greater than 0(otherwise voting can't begin)
-        _candidateExists(candidateId);
+        _candidateExists(candidateName);
         _;
     }
 
-    function _candidateExists(uint256 candidateId) internal view {
-        if (candidateId > candidates.length) {
+    function _candidateExists(string memory candidateName) internal view {
+        if (nameToCandidate[candidateName].isRegistered == false) {
             revert VotingLibrary.CANDIDATE__DOES__NOT__EXIST();
+        }
+    }
+
+    modifier isRegistered() {
+        _isRegistered();
+        _;
+    }
+
+    function _isRegistered() internal view {
+        if (addressToVoter[msg.sender].isRegistered == false) {
+            revert VotingLibrary.NOT__REGISTERED();
         }
     }
 
     function registerVoter(address _voterAddress)
         external
         onlyOwner
-        isRegistrationPhase
+        eqState(VotingLibrary.State.isRegistering)
         returns (VotingLibrary.Voter memory registeredVoter)
     {
         VotingLibrary.Voter storage voter = addressToVoter[_voterAddress];
@@ -73,76 +84,102 @@ contract SimpleVoting {
             revert VotingLibrary.IS__ALREADY__REGISTERED();
         } else {
             voter.isRegistered = true;
+            numberOfRegisteredVoters++;
+            emit VoterRegistered(_voterAddress);
         }
         return voter;
     }
 
-    function registerCandidate(uint256 candidateId, string memory _name)
-        external
-        onlyOwner
-        isRegistrationPhase
-        candidateExists(candidateId)
-    {
-        VotingLibrary.Candidate storage candidate = candidates[candidateId];
-
-        if (candidate.isRegistered) {
+    function registerCandidate(string memory _name) external onlyOwner eqState(VotingLibrary.State.isRegistering) {
+        if (nameToCandidate[_name].isRegistered) {
             revert VotingLibrary.IS__ALREADY__REGISTERED();
         } else {
-            candidate.name = _name;
-            candidate.isRegistered = true;
+            nameToCandidate[_name].isRegistered = true;
+            candidates.push(_name);
+            emit CandidateRegistered(_name);
         }
     }
 
-    function vote(uint256 candidateId) external candidateExists(candidateId) {
+    function vote(string memory candidateName)
+        external
+        candidateExists(candidateName)
+        isRegistered
+        eqState(VotingLibrary.State.isVoting)
+    {
         VotingLibrary.Voter storage voter = addressToVoter[msg.sender];
 
         if (voter.voted) {
             revert VotingLibrary.ALREADY__VOTED();
         } else {
+            nameToCandidate[candidateName].votes++;
             voter.voted = true;
-            voter.votedFor = candidates[candidateId];
-            candidates[candidateId].votes++;
+            voter.votedFor = nameToCandidate[candidateName];
+            emit Voted(msg.sender, candidateName);
         }
     }
 
     function startVoting() external onlyOwner {
-        if (candidates.length > 0) {
-            stateMachine.isRegistering = false;
-            stateMachine.isVoting = true;
+        if (candidates.length > 0 && numberOfRegisteredVoters > 0) {
+            stateMachine = VotingLibrary.State.isVoting;
+            emit RegistrationEnded();
+            emit VotingStarted();
         } else {
-            revert VotingLibrary.NOT__ENOUGH__CANDIDATES();
+            revert VotingLibrary.NOT__ENOUGH__REGISTERED_MEMBERS();
         }
     }
 
-    function endVoting() external onlyOwner {
-        stateMachine.isVoting = false;
-        stateMachine.isClosed = true;
+    function endVoting() external eqState(VotingLibrary.State.isVoting) onlyOwner {
+        stateMachine = VotingLibrary.State.isClosed;
+        emit VotingEnded();
     }
 
-    function getWinner() external view isClosed returns (VotingLibrary.Candidate memory returnedWinner) {
+    function getWinner()
+        external
+        eqState(VotingLibrary.State.isClosed)
+        returns (string memory, VotingLibrary.Candidate memory returnedWinner)
+    {
         VotingLibrary.Candidate memory currentWinner;
-
-        if (keccak256(abi.encode(winner.name)) != keccak256(abi.encode(""))) {
-            return winner;
+        string memory currentWinnerName;
+        if (keccak256(abi.encode(winner)) != keccak256(abi.encode(""))) {
+            return (winner, nameToCandidate[winner]);
         } else {
-            VotingLibrary.Candidate[] memory candidatesMemory = candidates;
+            string[] memory candidatesMemory = candidates;
             uint256 candidatesMemorylength = candidatesMemory.length;
 
             for (uint256 i = 0; i < candidatesMemorylength; i++) {
-                VotingLibrary.Candidate memory currentCandidate = candidates[i];
+                VotingLibrary.Candidate memory currentCandidate = nameToCandidate[candidates[i]];
                 if (currentCandidate.votes > currentWinner.votes) {
                     currentWinner = currentCandidate;
+                    currentWinnerName = candidates[i];
                 }
             }
         }
-        return currentWinner;
+        winner = currentWinnerName;
+        return (currentWinnerName, currentWinner);
     }
 
-    function getOwner() external view returns(address) {
+    function getOwner() external view returns (address) {
         return I_OWNER;
     }
 
     function getAddressToVoter(address voter) external view returns (VotingLibrary.Voter memory) {
         return addressToVoter[voter];
+    }
+
+    function getCandidateNames() external view returns (string[] memory) {
+        return candidates;
+    }
+
+    function getCandidateByName(string memory name)
+        external
+        view
+        candidateExists(name)
+        returns (VotingLibrary.Candidate memory)
+    {
+        return nameToCandidate[name];
+    }
+
+    function getState() external view returns (VotingLibrary.State) {
+        return stateMachine;
     }
 }
