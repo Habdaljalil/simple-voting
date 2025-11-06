@@ -239,7 +239,9 @@ contract TestSimpleVoting is Test {
     function testGetWinner() public registeredAndVoted inClosedPhase {
         (string memory winnerName, VotingLibrary.Candidate memory winnerStruct) = simpleVoting.getWinner();
         assertEq(winnerName, CANDIDATE_1);
-        assertEq(keccak256(abi.encode(winnerStruct)), keccak256(abi.encode(simpleVoting.getCandidateByName(CANDIDATE_1))));
+        assertEq(
+            keccak256(abi.encode(winnerStruct)), keccak256(abi.encode(simpleVoting.getCandidateByName(CANDIDATE_1)))
+        );
     }
 
     function testGetWinnerNotInClosedPhase() public registeredAndVoted {
