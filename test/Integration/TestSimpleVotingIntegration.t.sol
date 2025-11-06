@@ -7,11 +7,10 @@ import {SimpleVoting} from "../../src/SimpleVoting.sol";
 import {VotingLibrary} from "../../src/VotingLibrary.sol";
 import {TestSimpleVoting} from "../Unit/TestSimpleVoting.t.sol";
 
-/// @title 
-/// @author 
-/// @notice 
+/// @title
+/// @author
+/// @notice
 contract TestSimpleVotingIntegration is Test, TestSimpleVoting {
-    
     function testRegisterVoterIntegration(address voter) public {
         vm.startPrank(OWNER);
         simpleVoting.registerVoter(voter);

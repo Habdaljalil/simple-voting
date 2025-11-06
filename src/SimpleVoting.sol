@@ -2,11 +2,12 @@
 pragma solidity ^0.8.30;
 
 import {VotingLibrary} from "./VotingLibrary.sol";
+
 /// @title SimpleVoting
 /// @author Hassan Abdaljalil
 /// @notice Implements a simple, one-session voting system where an authorized entity can register voters and candidates and dictate the stages of voting
 contract SimpleVoting {
-    /// @dev The State struct that controls the stages of the voting procedure 
+    /// @dev The State struct that controls the stages of the voting procedure
     VotingLibrary.State private stateMachine;
     /// @dev Maps every address to a voter identity(struct)
     mapping(address => VotingLibrary.Voter) private addressToVoter;
@@ -21,17 +22,17 @@ contract SimpleVoting {
     string private winner;
     /// @dev The address of the deployed instance's owner
     address private immutable I_OWNER;
-    
+
     constructor() {
         I_OWNER = msg.sender;
     }
 
     /// @param voter The address of the voter that was registered
     event VoterRegistered(address indexed voter);
-    /// 
+    ///
     /// @param candidate The name of the candidate that was registered
     event CandidateRegistered(string indexed candidate);
-    
+
     /// @param voter the name of the registered voter who voted for the candidate
     /// @param candidate the name of the registered candidate
     event Voted(address indexed voter, string indexed candidate);
@@ -44,7 +45,7 @@ contract SimpleVoting {
         _eqState(expectedState);
         _;
     }
-    
+
     /// @dev Compares the expected stage of voting vs the actual stage; reverts if they do not match
     /// @param expectedState What the expected stage of voting is(i.e. Registration)
     function _eqState(VotingLibrary.State expectedState) internal view {
@@ -52,24 +53,25 @@ contract SimpleVoting {
             revert VotingLibrary.WRONG__PHASE(expectedState, stateMachine);
         }
     }
-    
+
     modifier onlyOwner() {
         _onlyOwner();
         _;
     }
-    
+
     function _onlyOwner() internal view {
         if (msg.sender != I_OWNER) {
             revert VotingLibrary.NOT__OWNER();
         }
     }
-    
+
     /// @param candidateName The name of the candidate who supposedly exists
     modifier candidateExists(string memory candidateName) {
         // assumes that candidates is greater than 0(otherwise voting can't begin)
         _candidateExists(candidateName);
         _;
     }
+
     /// @dev The function looks to see if the candidate is registered
     /// @param candidateName The name of the candidate who supposedly exists
     function _candidateExists(string memory candidateName) internal view {
@@ -77,20 +79,21 @@ contract SimpleVoting {
             revert VotingLibrary.CANDIDATE__DOES__NOT__EXIST();
         }
     }
-    
+
     modifier isRegistered() {
         _isRegistered();
         _;
     }
+
     /// @dev Checks to see if msg.sender is a registered voter
     function _isRegistered() internal view {
         if (addressToVoter[msg.sender].isRegistered == false) {
             revert VotingLibrary.NOT__REGISTERED();
         }
     }
-    
+
     /// @dev Only the owner can register voters; the function checks to see if the voter is not registered, otherwise it will revert; it updates correlated state variables subsequently
-    /// @param _voterAddress The address of the voter to register 
+    /// @param _voterAddress The address of the voter to register
     function registerVoter(address _voterAddress)
         external
         onlyOwner
@@ -110,7 +113,7 @@ contract SimpleVoting {
     }
 
     /// @dev Only the owner can call this function; registeres a candidate and updates state if they are not already registered
-    /// @param _name The name of the candidate to register 
+    /// @param _name The name of the candidate to register
     function registerCandidate(string memory _name) external onlyOwner eqState(VotingLibrary.State.isRegistering) {
         if (nameToCandidate[_name].isRegistered) {
             revert VotingLibrary.IS__ALREADY__REGISTERED();
@@ -120,8 +123,9 @@ contract SimpleVoting {
             emit CandidateRegistered(_name);
         }
     }
+
     /// @dev If a registered voter has not yet voted, then they can vote for a registered candidate once
-    /// @param candidateName The name of the candidate  
+    /// @param candidateName The name of the candidate
     function vote(string memory candidateName)
         external
         candidateExists(candidateName)
@@ -149,11 +153,13 @@ contract SimpleVoting {
             revert VotingLibrary.NOT__ENOUGH__REGISTERED_MEMBERS();
         }
     }
-    /// 
+
+    ///
     function endVoting() external eqState(VotingLibrary.State.isVoting) onlyOwner {
         stateMachine = VotingLibrary.State.isClosed;
         emit VotingEnded();
     }
+
     /// @dev Checks to see if voting has ended; then it looks for the winner, if they haven't already been found
     /// @return winnerName Name of the winner
     /// @return returnedWinner  Data(struct) associated with the winner
@@ -190,7 +196,7 @@ contract SimpleVoting {
     function getAddressToVoter(address voter) external view returns (VotingLibrary.Voter memory) {
         return addressToVoter[voter];
     }
-    
+
     function getCandidateNames() external view returns (string[] memory) {
         return candidates;
     }
@@ -204,7 +210,7 @@ contract SimpleVoting {
     {
         return nameToCandidate[name];
     }
-    
+
     function getState() external view returns (VotingLibrary.State) {
         return stateMachine;
     }
